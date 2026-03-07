@@ -44,6 +44,7 @@ import {
   expandCollapsedComposerCursor,
   parseStandaloneComposerSlashCommand,
   replaceTextRange,
+  shouldSubmitComposerOnEnter,
 } from "../composer-logic";
 import {
   derivePendingApprovals,
@@ -3395,7 +3396,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
       }
     }
 
-    if (key === "Enter" && !event.shiftKey) {
+    if (
+      key === "Enter" &&
+      shouldSubmitComposerOnEnter({
+        ctrlEnterToSend: settings.ctrlEnterToSend,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+      })
+    ) {
       void onSend();
       return true;
     }
