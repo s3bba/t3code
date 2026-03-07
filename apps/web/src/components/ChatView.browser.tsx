@@ -32,6 +32,7 @@ const PROJECT_ID = "project-1" as ProjectId;
 const NOW_ISO = "2026-03-04T12:00:00.000Z";
 const BASE_TIME_MS = Date.parse(NOW_ISO);
 const ATTACHMENT_SVG = "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='300'></svg>";
+const APP_SETTINGS_STORAGE_KEY = "t3code:app-settings:v1";
 
 interface WsRequestEnvelope {
   id: string;
@@ -541,6 +542,32 @@ async function waitForInteractionModeButton(
       ) as HTMLButtonElement | null,
     `Unable to find ${expectedLabel} interaction mode button.`,
   );
+}
+
+function hasTurnStartRequest(messageText?: string): boolean {
+  return wsRequests.some((request) => {
+    if (request._tag !== ORCHESTRATION_WS_METHODS.dispatchCommand) {
+      return false;
+    }
+    const command = request.command;
+    if (!command || typeof command !== "object" || !("type" in command)) {
+      return false;
+    }
+    if (command.type !== "thread.turn.start") {
+      return false;
+    }
+    if (messageText === undefined) {
+      return true;
+    }
+    if (!("message" in command)) {
+      return false;
+    }
+    const message = command.message;
+    if (!message || typeof message !== "object" || !("text" in message)) {
+      return false;
+    }
+    return message.text === messageText;
+  });
 }
 
 async function waitForImagesToLoad(scope: ParentNode): Promise<void> {
@@ -1240,6 +1267,88 @@ describe("ChatView timeline estimator parity (full app)", () => {
       await vi.waitFor(
         () => {
           expect(document.body.textContent).toContain("deep hidden detail only after expand");
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("submits the composer on Enter by default", async () => {
+    useComposerDraftStore.getState().setPrompt(THREAD_ID, "Send on enter");
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-target-enter-send" as MessageId,
+        targetText: "enter send target",
+      }),
+    });
+
+    try {
+      const composerEditor = await waitForComposerEditor();
+      composerEditor.focus();
+      composerEditor.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await vi.waitFor(
+        () => {
+          expect(hasTurnStartRequest("Send on enter")).toBe(true);
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("uses Ctrl+Enter to send when the setting is enabled", async () => {
+    localStorage.setItem(APP_SETTINGS_STORAGE_KEY, JSON.stringify({ ctrlEnterToSend: true }));
+    useComposerDraftStore.getState().setPrompt(THREAD_ID, "Ctrl send");
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-target-ctrl-enter-send" as MessageId,
+        targetText: "ctrl enter send target",
+      }),
+    });
+
+    try {
+      const composerEditor = await waitForComposerEditor();
+      composerEditor.focus();
+      composerEditor.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await vi.waitFor(
+        () => {
+          expect(hasTurnStartRequest()).toBe(false);
+          expect(useComposerDraftStore.getState().draftsByThreadId[THREAD_ID]?.prompt).toContain("\n");
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      composerEditor.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await vi.waitFor(
+        () => {
+          expect(hasTurnStartRequest("Ctrl send")).toBe(true);
         },
         { timeout: 8_000, interval: 16 },
       );
