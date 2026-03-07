@@ -625,12 +625,46 @@ function SettingsRouteView() {
               <div className="mb-4">
                 <h2 className="text-sm font-medium text-foreground">Keybindings</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Open the persisted <code>keybindings.json</code> file to edit advanced bindings
-                  directly.
+                  Configure composer shortcuts here, or open the persisted{" "}
+                  <code>keybindings.json</code> file to edit advanced bindings directly.
                 </p>
               </div>
 
               <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Use Ctrl+Enter to send</p>
+                    <p className="text-xs text-muted-foreground">
+                      Press Enter to insert a new line and Ctrl+Enter to send the composer content.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.ctrlEnterToSend}
+                    onCheckedChange={(checked) =>
+                      updateSettings({
+                        ctrlEnterToSend: Boolean(checked),
+                      })
+                    }
+                    aria-label="Use Ctrl+Enter to send"
+                  />
+                </div>
+
+                {settings.ctrlEnterToSend !== defaults.ctrlEnterToSend ? (
+                  <div className="flex justify-end">
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() =>
+                        updateSettings({
+                          ctrlEnterToSend: defaults.ctrlEnterToSend,
+                        })
+                      }
+                    >
+                      Restore default
+                    </Button>
+                  </div>
+                ) : null}
+
                 <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-foreground">Config file path</p>

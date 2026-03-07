@@ -249,6 +249,18 @@ export function parseStandaloneComposerSlashCommand(
   return "default";
 }
 
+export function shouldSubmitComposerOnEnter(input: {
+  ctrlEnterToSend: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+}): boolean {
+  if (input.ctrlEnterToSend) {
+    return input.ctrlKey && !input.shiftKey;
+  }
+
+  return !input.shiftKey;
+}
+
 export function replaceTextRange(
   text: string,
   rangeStart: number,
