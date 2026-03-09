@@ -129,12 +129,28 @@ export const ProjectScript = Schema.Struct({
 });
 export type ProjectScript = typeof ProjectScript.Type;
 
+const ProjectDevShellNone = Schema.Struct({
+  kind: Schema.Literal("none"),
+});
+
+const ProjectDevShellNixFlake = Schema.Struct({
+  kind: Schema.Literal("nix-flake"),
+});
+
+export const ProjectDevShell = Schema.Union([ProjectDevShellNone, ProjectDevShellNixFlake]);
+export type ProjectDevShell = typeof ProjectDevShell.Type;
+
+export const DEFAULT_PROJECT_DEV_SHELL: ProjectDevShell = {
+  kind: "none",
+};
+
 export const OrchestrationProject = Schema.Struct({
   id: ProjectId,
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,
   defaultModel: Schema.NullOr(TrimmedNonEmptyString),
   scripts: Schema.Array(ProjectScript),
+  devShell: Schema.optional(ProjectDevShell),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),
@@ -288,6 +304,7 @@ export const ProjectCreateCommand = Schema.Struct({
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,
   defaultModel: Schema.optional(TrimmedNonEmptyString),
+  devShell: Schema.optional(ProjectDevShell),
   createdAt: IsoDateTime,
 });
 
@@ -299,6 +316,7 @@ const ProjectMetaUpdateCommand = Schema.Struct({
   workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   defaultModel: Schema.optional(TrimmedNonEmptyString),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
+  devShell: Schema.optional(ProjectDevShell),
 });
 
 const ProjectDeleteCommand = Schema.Struct({
@@ -591,6 +609,7 @@ export const ProjectCreatedPayload = Schema.Struct({
   workspaceRoot: TrimmedNonEmptyString,
   defaultModel: Schema.NullOr(TrimmedNonEmptyString),
   scripts: Schema.Array(ProjectScript),
+  devShell: Schema.optional(ProjectDevShell),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -601,6 +620,7 @@ export const ProjectMetaUpdatedPayload = Schema.Struct({
   workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   defaultModel: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
+  devShell: Schema.optional(ProjectDevShell),
   updatedAt: IsoDateTime,
 });
 

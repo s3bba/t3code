@@ -11,6 +11,7 @@ import {
   TerminalCloseInput,
   TerminalEvent,
   TerminalOpenInput,
+  type ProjectDevShell,
   TerminalResizeInput,
   TerminalRestartInput,
   TerminalSessionSnapshot,
@@ -42,6 +43,7 @@ export interface TerminalSessionState {
   unsubscribeExit: (() => void) | null;
   hasRunningSubprocess: boolean;
   runtimeEnv: Record<string, string> | null;
+  devShell: ProjectDevShell;
 }
 
 export interface ShellCandidate {
