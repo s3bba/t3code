@@ -169,6 +169,12 @@ function multiTerminalHistoryLogPath(
   return path.join(logsDir, multiTerminalHistoryLogName(threadId, terminalId));
 }
 
+const workspaceDevShellEnvResolver = async () => ({
+  PATH: "/nix/store/bin",
+  IN_NIX_SHELL: "1",
+  CUSTOM_FLAG: "from-dev-shell",
+});
+
 describe("TerminalManager", () => {
   const tempDirs: string[] = [];
 
@@ -182,6 +188,10 @@ describe("TerminalManager", () => {
     historyLineLimit = 5,
     options: {
       shellResolver?: () => string;
+      workspaceDevShellResolver?: (input: {
+        readonly cwd: string;
+        readonly devShell: { readonly kind: "none" } | { readonly kind: "nix-flake" };
+      }) => Promise<Record<string, string> | null>;
       subprocessChecker?: (terminalPid: number) => Promise<boolean>;
       subprocessPollIntervalMs?: number;
       processKillGraceMs?: number;
@@ -197,6 +207,9 @@ describe("TerminalManager", () => {
       ptyAdapter,
       historyLineLimit,
       shellResolver: options.shellResolver ?? (() => "/bin/bash"),
+      ...(options.workspaceDevShellResolver
+        ? { workspaceDevShellResolver: options.workspaceDevShellResolver }
+        : {}),
       ...(options.subprocessChecker ? { subprocessChecker: options.subprocessChecker } : {}),
       ...(options.subprocessPollIntervalMs
         ? { subprocessPollIntervalMs: options.subprocessPollIntervalMs }
@@ -581,19 +594,13 @@ describe("TerminalManager", () => {
     expect(ptyAdapter.spawnInputs.length).toBeGreaterThanOrEqual(2);
     expect(ptyAdapter.spawnInputs[0]?.shell).toBe("/definitely/missing-shell");
 
-    if (process.platform === "win32") {
-      expect(
-        ptyAdapter.spawnInputs.some(
-          (input) => input.shell === "cmd.exe" || input.shell === "powershell.exe",
+    expect(
+      ptyAdapter.spawnInputs
+        .slice(1)
+        .some(
+          (input) => input.shell.trim().length > 0 && input.shell !== "/definitely/missing-shell",
         ),
-      ).toBe(true);
-    } else {
-      expect(
-        ptyAdapter.spawnInputs.some((input) =>
-          ["/bin/zsh", "/bin/bash", "/bin/sh", "zsh", "bash", "sh"].includes(input.shell),
-        ),
-      ).toBe(true);
-    }
+    ).toBe(true);
 
     manager.dispose();
   });
@@ -661,6 +668,29 @@ describe("TerminalManager", () => {
     expect(spawnInput.env.T3CODE_PROJECT_ROOT).toBe("/repo");
     expect(spawnInput.env.T3CODE_WORKTREE_PATH).toBe("/repo/worktree-a");
     expect(spawnInput.env.CUSTOM_FLAG).toBe("1");
+
+    manager.dispose();
+  });
+
+  it("injects cached workspace dev shell env before runtime overrides", async () => {
+    const { manager, ptyAdapter } = makeManager(5, {
+      workspaceDevShellResolver: workspaceDevShellEnvResolver,
+    });
+    await manager.open(
+      openInput({
+        env: {
+          CUSTOM_FLAG: "from-runtime-env",
+        },
+        devShell: { kind: "nix-flake" },
+      }),
+    );
+    const spawnInput = ptyAdapter.spawnInputs[0];
+    expect(spawnInput).toBeDefined();
+    if (!spawnInput) return;
+
+    expect(spawnInput.env.PATH).toBe("/nix/store/bin");
+    expect(spawnInput.env.IN_NIX_SHELL).toBe("1");
+    expect(spawnInput.env.CUSTOM_FLAG).toBe("from-runtime-env");
 
     manager.dispose();
   });

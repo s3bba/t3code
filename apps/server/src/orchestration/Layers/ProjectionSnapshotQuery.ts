@@ -6,6 +6,7 @@ import {
   OrchestrationCheckpointFile,
   OrchestrationProposedPlanId,
   OrchestrationReadModel,
+  ProjectDevShell,
   ProjectScript,
   ThreadId,
   TurnId,
@@ -46,6 +47,7 @@ const decodeReadModel = Schema.decodeUnknownEffect(OrchestrationReadModel);
 const ProjectionProjectDbRowSchema = ProjectionProject.mapFields(
   Struct.assign({
     scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
+    devShell: Schema.fromJsonString(ProjectDevShell),
   }),
 );
 const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
@@ -143,6 +145,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           workspace_root AS "workspaceRoot",
           default_model AS "defaultModel",
           scripts_json AS "scripts",
+          dev_shell_json AS "devShell",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -537,6 +540,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             workspaceRoot: row.workspaceRoot,
             defaultModel: row.defaultModel,
             scripts: row.scripts,
+            devShell: row.devShell,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
             deletedAt: row.deletedAt,

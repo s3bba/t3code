@@ -4,6 +4,7 @@ import {
   type ContextMenuItem,
   type NativeApi,
   ServerConfigUpdatedPayload,
+  WorkspaceDevShellEvent,
   WS_CHANNELS,
   WS_METHODS,
   type WsWelcomePayload,
@@ -15,6 +16,8 @@ import { WsTransport } from "./wsTransport";
 let instance: { api: NativeApi; transport: WsTransport } | null = null;
 const welcomeListeners = new Set<(payload: WsWelcomePayload) => void>();
 const serverConfigUpdatedListeners = new Set<(payload: ServerConfigUpdatedPayload) => void>();
+const workspaceDevShellEventListeners = new Set<(payload: WorkspaceDevShellEvent) => void>();
+const lastWorkspaceDevShellEventByCwd = new Map<string, WorkspaceDevShellEvent>();
 
 /**
  * Subscribe to the server welcome message. If a welcome was already received
@@ -62,6 +65,30 @@ export function onServerConfigUpdated(
   };
 }
 
+export function onWorkspaceDevShellEvent(
+  listener: (payload: WorkspaceDevShellEvent) => void,
+): () => void {
+  workspaceDevShellEventListeners.add(listener);
+
+  const latestWorkspaceDevShell =
+    instance?.transport.getLatestPush(WS_CHANNELS.workspaceDevShellEvent)?.data ?? null;
+  if (latestWorkspaceDevShell) {
+    lastWorkspaceDevShellEventByCwd.set(latestWorkspaceDevShell.cwd, latestWorkspaceDevShell);
+  }
+
+  for (const payload of lastWorkspaceDevShellEventByCwd.values()) {
+    try {
+      listener(payload);
+    } catch {
+      // Swallow listener errors
+    }
+  }
+
+  return () => {
+    workspaceDevShellEventListeners.delete(listener);
+  };
+}
+
 export function createWsNativeApi(): NativeApi {
   if (instance) return instance.api;
 
@@ -80,6 +107,17 @@ export function createWsNativeApi(): NativeApi {
   transport.subscribe(WS_CHANNELS.serverConfigUpdated, (message) => {
     const payload = message.data;
     for (const listener of serverConfigUpdatedListeners) {
+      try {
+        listener(payload);
+      } catch {
+        // Swallow listener errors
+      }
+    }
+  });
+  transport.subscribe(WS_CHANNELS.workspaceDevShellEvent, (message) => {
+    const payload = message.data;
+    lastWorkspaceDevShellEventByCwd.set(payload.cwd, payload);
+    for (const listener of workspaceDevShellEventListeners) {
       try {
         listener(payload);
       } catch {

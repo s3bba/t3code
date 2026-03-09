@@ -1,4 +1,5 @@
-import type {
+import {
+  DEFAULT_PROJECT_DEV_SHELL,
   OrchestrationCommand,
   OrchestrationEvent,
   OrchestrationReadModel,
@@ -79,6 +80,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           workspaceRoot: command.workspaceRoot,
           defaultModel: command.defaultModel ?? null,
           scripts: [],
+          devShell: command.devShell ?? DEFAULT_PROJECT_DEV_SHELL,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
         },
@@ -106,6 +108,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.workspaceRoot !== undefined ? { workspaceRoot: command.workspaceRoot } : {}),
           ...(command.defaultModel !== undefined ? { defaultModel: command.defaultModel } : {}),
           ...(command.scripts !== undefined ? { scripts: command.scripts } : {}),
+          ...(command.devShell !== undefined ? { devShell: command.devShell } : {}),
           updatedAt: occurredAt,
         },
       };

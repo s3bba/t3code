@@ -2,6 +2,7 @@ import {
   type ChatAttachment,
   CommandId,
   DEFAULT_GIT_TEXT_GENERATION_MODEL,
+  DEFAULT_PROJECT_DEV_SHELL,
   EventId,
   type OrchestrationEvent,
   type ProviderModelOptions,
@@ -253,6 +254,8 @@ const make = Effect.gen(function* () {
     }
     const preferredProvider: ProviderKind = currentProvider ?? threadProvider;
     const desiredModel = options?.model ?? thread.model;
+    const project = readModel.projects.find((entry) => entry.id === thread.projectId);
+    const desiredDevShell = project?.devShell ?? DEFAULT_PROJECT_DEV_SHELL;
     const effectiveCwd = resolveThreadWorkspaceCwd({
       thread,
       projects: readModel.projects,
@@ -273,6 +276,7 @@ const make = Effect.gen(function* () {
           ? { provider: input?.provider ?? preferredProvider }
           : {}),
         ...(effectiveCwd ? { cwd: effectiveCwd } : {}),
+        devShell: desiredDevShell,
         ...(desiredModel ? { model: desiredModel } : {}),
         ...(options?.modelOptions !== undefined ? { modelOptions: options.modelOptions } : {}),
         ...(options?.providerOptions !== undefined
@@ -310,6 +314,9 @@ const make = Effect.gen(function* () {
           ? "in-session"
           : (yield* providerService.getCapabilities(currentProvider)).sessionModelSwitch;
       const modelChanged = options?.model !== undefined && options.model !== activeSession?.model;
+      const cwdChanged = effectiveCwd !== (activeSession?.cwd ?? undefined);
+      const devShellChanged =
+        JSON.stringify(desiredDevShell) !== JSON.stringify(activeSession?.devShell);
       const shouldRestartForModelChange = modelChanged && sessionModelSwitch === "restart-session";
       const previousModelOptions = threadModelOptions.get(threadId);
       const shouldRestartForModelOptionsChange =
@@ -320,6 +327,8 @@ const make = Effect.gen(function* () {
       if (
         !runtimeModeChanged &&
         !providerChanged &&
+        !cwdChanged &&
+        !devShellChanged &&
         !shouldRestartForModelChange &&
         !shouldRestartForModelOptionsChange
       ) {
@@ -339,6 +348,8 @@ const make = Effect.gen(function* () {
         desiredRuntimeMode: thread.runtimeMode,
         runtimeModeChanged,
         providerChanged,
+        cwdChanged,
+        devShellChanged,
         modelChanged,
         shouldRestartForModelChange,
         shouldRestartForModelOptionsChange,
