@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode, createElement, useEffect } from "react";
 import {
+  DEFAULT_PROJECT_DEV_SHELL,
   DEFAULT_MODEL_BY_PROVIDER,
   type ProviderKind,
   ThreadId,
@@ -146,6 +147,7 @@ function mapProjectsFromReadModel(
           ? persistedExpandedProjectCwds.has(project.workspaceRoot)
           : true),
       scripts: project.scripts.map((script) => ({ ...script })),
+      devShell: project.devShell ?? DEFAULT_PROJECT_DEV_SHELL,
     } satisfies Project;
   });
 

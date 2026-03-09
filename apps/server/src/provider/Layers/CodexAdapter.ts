@@ -9,6 +9,7 @@
 import {
   type CanonicalItemType,
   type CanonicalRequestType,
+  DEFAULT_PROJECT_DEV_SHELL,
   type ProviderEvent,
   type ProviderRuntimeEvent,
   type ProviderUserInputAnswers,
@@ -35,6 +36,8 @@ import {
   CodexAppServerManager,
   type CodexAppServerStartSessionInput,
 } from "../../codexAppServerManager.ts";
+import { WorkspaceDevShellLive } from "../../devShell/Layers/WorkspaceDevShell.ts";
+import { WorkspaceDevShell } from "../../devShell/Services/WorkspaceDevShell.ts";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
@@ -1269,6 +1272,7 @@ const makeCodexAdapter = (options?: CodexAdapterLiveOptions) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const serverConfig = yield* Effect.service(ServerConfig);
+    const workspaceDevShell = yield* WorkspaceDevShell;
     const nativeEventLogger =
       options?.nativeEventLogger ??
       (options?.nativeEventLogPath !== undefined
@@ -1283,7 +1287,18 @@ const makeCodexAdapter = (options?: CodexAdapterLiveOptions) =>
           return options.manager;
         }
         const services = yield* Effect.services<never>();
-        return options?.makeManager?.(services) ?? new CodexAppServerManager(services);
+        return (
+          options?.makeManager?.(services) ??
+          new CodexAppServerManager(services, {
+            workspaceDevShellResolver: (input) =>
+              Effect.runPromise(
+                workspaceDevShell.resolveEnvironmentOverlay({
+                  cwd: input.cwd,
+                  devShell: input.devShell ?? DEFAULT_PROJECT_DEV_SHELL,
+                }),
+              ),
+          })
+        );
       }),
       (manager) =>
         Effect.sync(() => {
@@ -1310,6 +1325,7 @@ const makeCodexAdapter = (options?: CodexAdapterLiveOptions) =>
         threadId: input.threadId,
         provider: "codex",
         ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
+        devShell: input.devShell,
         ...(input.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
         ...(input.providerOptions !== undefined ? { providerOptions: input.providerOptions } : {}),
         runtimeMode: input.runtimeMode,
@@ -1526,8 +1542,12 @@ const makeCodexAdapter = (options?: CodexAdapterLiveOptions) =>
     } satisfies CodexAdapterShape;
   });
 
-export const CodexAdapterLive = Layer.effect(CodexAdapter, makeCodexAdapter());
+export const CodexAdapterLive = Layer.effect(CodexAdapter, makeCodexAdapter()).pipe(
+  Layer.provide(WorkspaceDevShellLive),
+);
 
 export function makeCodexAdapterLive(options?: CodexAdapterLiveOptions) {
-  return Layer.effect(CodexAdapter, makeCodexAdapter(options));
+  return Layer.effect(CodexAdapter, makeCodexAdapter(options)).pipe(
+    Layer.provide(WorkspaceDevShellLive),
+  );
 }

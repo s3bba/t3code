@@ -5,6 +5,7 @@ import readline from "node:readline";
 
 import {
   ApprovalRequestId,
+  DEFAULT_PROJECT_DEV_SHELL,
   EventId,
   ProviderItemId,
   ProviderRequestKind,
@@ -129,6 +130,7 @@ export interface CodexAppServerStartSessionInput {
   readonly provider?: "codex";
   readonly cwd?: string;
   readonly model?: string;
+  readonly devShell?: ProviderSessionStartInput["devShell"];
   readonly serviceTier?: string;
   readonly resumeCursor?: unknown;
   readonly providerOptions?: ProviderSessionStartInput["providerOptions"];
@@ -513,13 +515,23 @@ export interface CodexAppServerManagerEvents {
   event: [event: ProviderEvent];
 }
 
+interface CodexAppServerManagerOptions {
+  readonly workspaceDevShellResolver?: (input: {
+    readonly cwd: string;
+    readonly devShell: ProviderSessionStartInput["devShell"];
+  }) => Promise<Record<string, string> | null>;
+}
+
 export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEvents> {
   private readonly sessions = new Map<ThreadId, CodexSessionContext>();
 
   private runPromise: (effect: Effect.Effect<unknown, never>) => Promise<unknown>;
-  constructor(services?: ServiceMap.ServiceMap<never>) {
+  private readonly workspaceDevShellResolver?: CodexAppServerManagerOptions["workspaceDevShellResolver"];
+
+  constructor(services?: ServiceMap.ServiceMap<never>, options?: CodexAppServerManagerOptions) {
     super();
     this.runPromise = services ? Effect.runPromiseWith(services) : Effect.runPromise;
+    this.workspaceDevShellResolver = options?.workspaceDevShellResolver;
   }
 
   async startSession(input: CodexAppServerStartSessionInput): Promise<ProviderSession> {
@@ -536,6 +548,7 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
         runtimeMode: input.runtimeMode,
         model: normalizeCodexModelSlug(input.model),
         cwd: resolvedCwd,
+        devShell: input.devShell ?? DEFAULT_PROJECT_DEV_SHELL,
         threadId,
         createdAt: now,
         updatedAt: now,
@@ -549,12 +562,22 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
         cwd: resolvedCwd,
         ...(codexHomePath ? { homePath: codexHomePath } : {}),
       });
+      const devShellEnv = this.workspaceDevShellResolver
+        ? await this.workspaceDevShellResolver({
+            cwd: resolvedCwd,
+            devShell: input.devShell ?? DEFAULT_PROJECT_DEV_SHELL,
+          })
+        : null;
+      const childEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        ...(codexHomePath ? { CODEX_HOME: codexHomePath } : {}),
+      };
+      if (devShellEnv) {
+        Object.assign(childEnv, devShellEnv);
+      }
       const child = spawn(codexBinaryPath, ["app-server"], {
         cwd: resolvedCwd,
-        env: {
-          ...process.env,
-          ...(codexHomePath ? { CODEX_HOME: codexHomePath } : {}),
-        },
+        env: childEnv,
         stdio: ["pipe", "pipe", "pipe"],
         shell: process.platform === "win32",
       });
@@ -1658,7 +1681,11 @@ function readResumeCursorThreadId(resumeCursor: unknown): string | undefined {
   return typeof rawThreadId === "string" ? normalizeProviderThreadId(rawThreadId) : undefined;
 }
 
-function readResumeThreadId(input: CodexAppServerStartSessionInput): string | undefined {
+function readResumeThreadId(input: {
+  readonly threadId: ThreadId;
+  readonly runtimeMode: RuntimeMode;
+  readonly resumeCursor?: unknown;
+}): string | undefined {
   return readResumeCursorThreadId(input.resumeCursor);
 }
 
