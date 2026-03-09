@@ -1,6 +1,7 @@
 import {
   type ChatAttachment,
   CommandId,
+  DEFAULT_PROJECT_DEV_SHELL,
   EventId,
   type OrchestrationEvent,
   type ProviderModelOptions,
@@ -209,6 +210,8 @@ const make = Effect.gen(function* () {
       thread.session?.providerName === "codex" ? thread.session.providerName : undefined;
     const preferredProvider: ProviderKind | undefined = options?.provider ?? currentProvider;
     const desiredModel = options?.model ?? thread.model;
+    const project = readModel.projects.find((entry) => entry.id === thread.projectId);
+    const desiredDevShell = project?.devShell ?? DEFAULT_PROJECT_DEV_SHELL;
     const effectiveCwd = resolveThreadWorkspaceCwd({
       thread,
       projects: readModel.projects,
@@ -229,6 +232,7 @@ const make = Effect.gen(function* () {
           ? { provider: input?.provider ?? preferredProvider }
           : {}),
         ...(effectiveCwd ? { cwd: effectiveCwd } : {}),
+        devShell: desiredDevShell,
         ...(desiredModel ? { model: desiredModel } : {}),
         ...(options?.modelOptions !== undefined ? { modelOptions: options.modelOptions } : {}),
         ...(options?.providerOptions !== undefined
@@ -266,9 +270,18 @@ const make = Effect.gen(function* () {
           ? "in-session"
           : (yield* providerService.getCapabilities(currentProvider)).sessionModelSwitch;
       const modelChanged = options?.model !== undefined && options.model !== activeSession?.model;
+      const cwdChanged = effectiveCwd !== (activeSession?.cwd ?? undefined);
+      const devShellChanged =
+        JSON.stringify(desiredDevShell) !== JSON.stringify(activeSession?.devShell);
       const shouldRestartForModelChange = modelChanged && sessionModelSwitch === "restart-session";
 
-      if (!runtimeModeChanged && !providerChanged && !shouldRestartForModelChange) {
+      if (
+        !runtimeModeChanged &&
+        !providerChanged &&
+        !cwdChanged &&
+        !devShellChanged &&
+        !shouldRestartForModelChange
+      ) {
         return existingSessionThreadId;
       }
 
@@ -285,6 +298,8 @@ const make = Effect.gen(function* () {
         desiredRuntimeMode: thread.runtimeMode,
         runtimeModeChanged,
         providerChanged,
+        cwdChanged,
+        devShellChanged,
         modelChanged,
         shouldRestartForModelChange,
         hasResumeCursor: resumeCursor !== undefined,

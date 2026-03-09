@@ -23,6 +23,7 @@ import {
   WS_CHANNELS,
   WS_METHODS,
   WebSocketRequest,
+  type WorkspaceDevShellEvent,
   type WsResponse as WsResponseMessage,
   WsResponse,
   type WsPushEnvelopeBase,
@@ -75,6 +76,7 @@ import {
 import { parseBase64DataUrl } from "./imageMime.ts";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService.ts";
 import { expandHomePath } from "./os-jank.ts";
+import { WorkspaceDevShell } from "./devShell/Services/WorkspaceDevShell.ts";
 import { makeServerPushBus } from "./wsServer/pushBus.ts";
 import { makeServerReadiness } from "./wsServer/readiness.ts";
 import { decodeJsonResult, formatSchemaError } from "@t3tools/shared/schemaJson";
@@ -215,6 +217,7 @@ export type ServerRuntimeServices =
   | GitManager
   | GitCore
   | TerminalManager
+  | WorkspaceDevShell
   | Keybindings
   | Open
   | AnalyticsService;
@@ -252,6 +255,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
   const gitManager = yield* GitManager;
   const terminalManager = yield* TerminalManager;
+  const workspaceDevShell = yield* WorkspaceDevShell;
   const keybindingsManager = yield* Keybindings;
   const providerHealth = yield* ProviderHealth;
   const git = yield* GitCore;
@@ -295,6 +299,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     ),
   );
   yield* readiness.markKeybindingsReady;
+
+  const onWorkspaceDevShellEvent = Effect.fnUntraced(function* (event: WorkspaceDevShellEvent) {
+    yield* pushBus.publishAll(WS_CHANNELS.workspaceDevShellEvent, event);
+  });
 
   const normalizeDispatchCommand = Effect.fnUntraced(function* (input: {
     readonly command: ClientOrchestrationCommand;
@@ -694,6 +702,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   );
   yield* Effect.addFinalizer(() => Effect.sync(() => unsubscribeTerminalEvents()));
   yield* readiness.markTerminalSubscriptionsReady;
+  const unsubscribeWorkspaceDevShellEvents = yield* workspaceDevShell.subscribe(
+    (event) => void Effect.runPromise(onWorkspaceDevShellEvent(event)),
+  );
+  yield* Effect.addFinalizer(() => Effect.sync(() => unsubscribeWorkspaceDevShellEvents()));
 
   yield* NodeHttpServer.make(() => httpServer, listenOptions).pipe(
     Effect.mapError((cause) => new ServerLifecycleError({ operation: "httpServerListen", cause })),

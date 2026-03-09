@@ -1,5 +1,11 @@
 import { Schema, Struct } from "effect";
-import { NonNegativeInt, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas";
+import {
+  IsoDateTime,
+  NonNegativeInt,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas";
 
 import {
   ClientOrchestrationCommand,
@@ -81,6 +87,7 @@ export const WS_METHODS = {
 
 export const WS_CHANNELS = {
   terminalEvent: "terminal.event",
+  workspaceDevShellEvent: "workspaceDevShell.event",
   serverWelcome: "server.welcome",
   serverConfigUpdated: "server.configUpdated",
 } as const;
@@ -169,10 +176,33 @@ export const WsWelcomePayload = Schema.Struct({
 });
 export type WsWelcomePayload = typeof WsWelcomePayload.Type;
 
+const WorkspaceDevShellEventBase = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  createdAt: IsoDateTime,
+});
+
+export const WorkspaceDevShellEvent = Schema.Union([
+  Schema.Struct({
+    ...WorkspaceDevShellEventBase.fields,
+    type: Schema.Literal("loading"),
+  }),
+  Schema.Struct({
+    ...WorkspaceDevShellEventBase.fields,
+    type: Schema.Literal("ready"),
+  }),
+  Schema.Struct({
+    ...WorkspaceDevShellEventBase.fields,
+    type: Schema.Literal("error"),
+    message: TrimmedNonEmptyString,
+  }),
+]);
+export type WorkspaceDevShellEvent = typeof WorkspaceDevShellEvent.Type;
+
 export interface WsPushPayloadByChannel {
   readonly [WS_CHANNELS.serverWelcome]: WsWelcomePayload;
   readonly [WS_CHANNELS.serverConfigUpdated]: typeof ServerConfigUpdatedPayload.Type;
   readonly [WS_CHANNELS.terminalEvent]: typeof TerminalEvent.Type;
+  readonly [WS_CHANNELS.workspaceDevShellEvent]: WorkspaceDevShellEvent;
   readonly [ORCHESTRATION_WS_CHANNELS.domainEvent]: OrchestrationEvent;
 }
 
@@ -196,6 +226,10 @@ export const WsPushServerConfigUpdated = makeWsPushSchema(
   ServerConfigUpdatedPayload,
 );
 export const WsPushTerminalEvent = makeWsPushSchema(WS_CHANNELS.terminalEvent, TerminalEvent);
+export const WsPushWorkspaceDevShellEvent = makeWsPushSchema(
+  WS_CHANNELS.workspaceDevShellEvent,
+  WorkspaceDevShellEvent,
+);
 export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
   ORCHESTRATION_WS_CHANNELS.domainEvent,
   OrchestrationEvent,
@@ -205,6 +239,7 @@ export const WsPushChannelSchema = Schema.Literals([
   WS_CHANNELS.serverWelcome,
   WS_CHANNELS.serverConfigUpdated,
   WS_CHANNELS.terminalEvent,
+  WS_CHANNELS.workspaceDevShellEvent,
   ORCHESTRATION_WS_CHANNELS.domainEvent,
 ]);
 export type WsPushChannelSchema = typeof WsPushChannelSchema.Type;
@@ -213,6 +248,7 @@ export const WsPush = Schema.Union([
   WsPushServerWelcome,
   WsPushServerConfigUpdated,
   WsPushTerminalEvent,
+  WsPushWorkspaceDevShellEvent,
   WsPushOrchestrationDomainEvent,
 ]);
 export type WsPush = typeof WsPush.Type;

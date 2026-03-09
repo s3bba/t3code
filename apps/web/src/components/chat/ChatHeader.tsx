@@ -1,8 +1,10 @@
 import {
   type EditorId,
+  type ProjectDevShell,
   type ProjectScript,
   type ResolvedKeybindingsConfig,
   type ThreadId,
+  type WorkspaceDevShellEvent,
 } from "@t3tools/contracts";
 import { memo } from "react";
 import GitActionsControl from "../GitActionsControl";
@@ -13,11 +15,15 @@ import ProjectScriptsControl, { type NewProjectScriptInput } from "../ProjectScr
 import { Toggle } from "../ui/toggle";
 import { SidebarTrigger } from "../ui/sidebar";
 import { OpenInPicker } from "./OpenInPicker";
+import { Spinner } from "../ui/spinner";
+import { cn } from "~/lib/utils";
 
 interface ChatHeaderProps {
   activeThreadId: ThreadId;
   activeThreadTitle: string;
   activeProjectName: string | undefined;
+  activeProjectDevShell: ProjectDevShell | undefined;
+  activeWorkspaceDevShellEvent: WorkspaceDevShellEvent | null;
   isGitRepo: boolean;
   openInCwd: string | null;
   activeProjectScripts: ProjectScript[] | undefined;
@@ -31,6 +37,7 @@ interface ChatHeaderProps {
   onAddProjectScript: (input: NewProjectScriptInput) => Promise<void>;
   onUpdateProjectScript: (scriptId: string, input: NewProjectScriptInput) => Promise<void>;
   onDeleteProjectScript: (scriptId: string) => Promise<void>;
+  onToggleProjectDevShell: () => void;
   onToggleDiff: () => void;
 }
 
@@ -38,6 +45,8 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadId,
   activeThreadTitle,
   activeProjectName,
+  activeProjectDevShell,
+  activeWorkspaceDevShellEvent,
   isGitRepo,
   openInCwd,
   activeProjectScripts,
@@ -51,8 +60,14 @@ export const ChatHeader = memo(function ChatHeader({
   onAddProjectScript,
   onUpdateProjectScript,
   onDeleteProjectScript,
+  onToggleProjectDevShell,
   onToggleDiff,
 }: ChatHeaderProps) {
+  const isNixDevShellEnabled = activeProjectDevShell?.kind === "nix-flake";
+  const isPreparingWorkspaceDevShell = activeWorkspaceDevShellEvent?.type === "loading";
+  const workspaceDevShellErrorMessage =
+    activeWorkspaceDevShellEvent?.type === "error" ? activeWorkspaceDevShellEvent.message : null;
+
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
@@ -85,6 +100,44 @@ export const ChatHeader = memo(function ChatHeader({
             onUpdateScript={onUpdateProjectScript}
             onDeleteScript={onDeleteProjectScript}
           />
+        )}
+        {activeProjectName && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Toggle
+                  className={cn("shrink-0 gap-1 px-2 text-[11px]", {
+                    "border-blue-600 bg-blue-600 hover:bg-blue-500": isNixDevShellEnabled,
+                    "border-amber-500/60 text-amber-700": workspaceDevShellErrorMessage,
+                  })}
+                  pressed={isNixDevShellEnabled}
+                  onPressedChange={onToggleProjectDevShell}
+                  aria-label={
+                    isPreparingWorkspaceDevShell
+                      ? "Preparing nix flake dev shell"
+                      : isNixDevShellEnabled
+                        ? "Disable nix flake dev shell"
+                        : "Enable nix flake dev shell"
+                  }
+                  variant="outline"
+                  size="xs"
+                  disabled={isPreparingWorkspaceDevShell}
+                >
+                  {isPreparingWorkspaceDevShell ? <Spinner className="size-3" /> : null}
+                  Nix
+                </Toggle>
+              }
+            />
+            <TooltipPopup side="bottom">
+              {isPreparingWorkspaceDevShell
+                ? "Preparing nix flake dev shell..."
+                : workspaceDevShellErrorMessage
+                  ? workspaceDevShellErrorMessage
+                  : isNixDevShellEnabled
+                    ? "Disable the cached flake dev shell for terminal and agent sessions"
+                    : "Enable the cached flake dev shell for terminal and agent sessions"}
+            </TooltipPopup>
+          </Tooltip>
         )}
         {activeProjectName && (
           <OpenInPicker

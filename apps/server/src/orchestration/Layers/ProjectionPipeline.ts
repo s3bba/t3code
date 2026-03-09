@@ -1,6 +1,7 @@
 import {
   ApprovalRequestId,
   type ChatAttachment,
+  DEFAULT_PROJECT_DEV_SHELL,
   type OrchestrationEvent,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -364,6 +365,7 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
             workspaceRoot: event.payload.workspaceRoot,
             defaultModel: event.payload.defaultModel,
             scripts: event.payload.scripts,
+            devShell: event.payload.devShell ?? DEFAULT_PROJECT_DEV_SHELL,
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
             deletedAt: null,
@@ -387,6 +389,7 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
               ? { defaultModel: event.payload.defaultModel }
               : {}),
             ...(event.payload.scripts !== undefined ? { scripts: event.payload.scripts } : {}),
+            ...(event.payload.devShell !== undefined ? { devShell: event.payload.devShell } : {}),
             updatedAt: event.payload.updatedAt,
           });
           return;
