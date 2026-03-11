@@ -12,7 +12,7 @@
 
 3. Build/update `stacks/all` from `main` with all rebased `feat/*` + `fix/*` commits:
    - `git checkout -B stacks/all main`
-   - cherry-pick branch tips in desired order (example):
+   - cherry-pick branch tips in desired order:
      - `git cherry-pick feat/nix-flake-support`
      - `git cherry-pick feat/nix-flake-devshell-integration`
      - `git cherry-pick feat/ctrl-enter-send`
@@ -21,6 +21,4 @@
    - `git checkout main`
 
 4. Upstream overlap check (report result):
-   - For each `feat/*` and `fix/*`, run `git cherry -v main <branch>`.
-   - If any commit is shown with `-`, upstream already contains an equivalent patch.
-   - If all are `+`, all `feat/*` and `fix/*` branches are still required.
+   - For each `feat/*` and `fix/*`, check if features and fixes have been added upstream, (NOTE: the upstream will probably create their own fix, so it probably won't be 1:1 match)
