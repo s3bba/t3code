@@ -17,6 +17,7 @@
      - `git cherry-pick feat/nix-flake-devshell-integration`
      - `git cherry-pick feat/ctrl-enter-send`
      - `git cherry-pick fix/session-resume`
+   - update nix hashes, so package can be installed from `stacks/all` branch
    - `git push --force-with-lease origin stacks/all`
    - `git checkout main`
 
