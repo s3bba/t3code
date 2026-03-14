@@ -33,6 +33,7 @@ import { GitCoreLive } from "./git/Layers/GitCore";
 import { GitHubCliLive } from "./git/Layers/GitHubCli";
 import { CodexTextGenerationLive } from "./git/Layers/CodexTextGeneration";
 import { GitServiceLive } from "./git/Layers/GitService";
+import { WorkspaceDevShellLive } from "./devShell/Layers/WorkspaceDevShell";
 import { BunPtyAdapterLive } from "./terminal/Layers/BunPTY";
 import { NodePtyAdapterLive } from "./terminal/Layers/NodePTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
@@ -64,7 +65,11 @@ export function makeServerProviderLayer(): Layer.Layer<
     );
     return makeProviderServiceLive(
       canonicalEventLogger ? { canonicalEventLogger } : undefined,
-    ).pipe(Layer.provide(adapterRegistryLayer), Layer.provide(providerSessionDirectoryLayer));
+    ).pipe(
+      Layer.provide(adapterRegistryLayer),
+      Layer.provide(providerSessionDirectoryLayer),
+      Layer.provide(WorkspaceDevShellLive),
+    );
   }).pipe(Layer.unwrap);
 }
 
@@ -113,6 +118,7 @@ export function makeServerRuntimeServicesLayer() {
         ? BunPtyAdapterLive
         : NodePtyAdapterLive,
     ),
+    Layer.provide(WorkspaceDevShellLive),
   );
 
   const gitManagerLayer = GitManagerLive.pipe(
@@ -127,5 +133,6 @@ export function makeServerRuntimeServicesLayer() {
     gitManagerLayer,
     terminalLayer,
     KeybindingsLive,
+    WorkspaceDevShellLive,
   ).pipe(Layer.provideMerge(NodeServices.layer));
 }

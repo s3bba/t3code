@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { TrimmedNonEmptyString } from "./baseSchemas";
+import { ProjectDevShell } from "./orchestration";
 
 export const DEFAULT_TERMINAL_ID = "default";
 
@@ -40,6 +41,7 @@ export const TerminalOpenInput = Schema.Struct({
   cols: Schema.optional(TerminalColsSchema),
   rows: Schema.optional(TerminalRowsSchema),
   env: Schema.optional(TerminalEnvSchema),
+  devShell: Schema.optional(ProjectDevShell),
 });
 export type TerminalOpenInput = Schema.Codec.Encoded<typeof TerminalOpenInput>;
 
@@ -65,6 +67,7 @@ export const TerminalRestartInput = Schema.Struct({
   cols: TerminalColsSchema,
   rows: TerminalRowsSchema,
   env: Schema.optional(TerminalEnvSchema),
+  devShell: Schema.optional(ProjectDevShell),
 });
 export type TerminalRestartInput = Schema.Codec.Encoded<typeof TerminalRestartInput>;
 

@@ -3,9 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
+  DEFAULT_PROJECT_DEV_SHELL,
   DEFAULT_TERMINAL_ID,
   TerminalClearInput,
   TerminalCloseInput,
+  type ProjectDevShell,
   TerminalOpenInput,
   TerminalResizeInput,
   TerminalRestartInput,
@@ -19,6 +21,7 @@ import { createLogger } from "../../logger";
 import { PtyAdapter, PtyAdapterShape, type PtyExitEvent, type PtyProcess } from "../Services/PTY";
 import { runProcess } from "../../processRunner";
 import { ServerConfig } from "../../config";
+import { WorkspaceDevShell } from "../../devShell/Services/WorkspaceDevShell.ts";
 import {
   ShellCandidate,
   TerminalError,
@@ -283,6 +286,7 @@ function shouldExcludeTerminalEnvKey(key: string): boolean {
 
 function createTerminalSpawnEnv(
   baseEnv: NodeJS.ProcessEnv,
+  devShellEnv?: Record<string, string> | null,
   runtimeEnv?: Record<string, string> | null,
 ): NodeJS.ProcessEnv {
   const spawnEnv: NodeJS.ProcessEnv = {};
@@ -290,6 +294,11 @@ function createTerminalSpawnEnv(
     if (value === undefined) continue;
     if (shouldExcludeTerminalEnvKey(key)) continue;
     spawnEnv[key] = value;
+  }
+  if (devShellEnv) {
+    for (const [key, value] of Object.entries(devShellEnv)) {
+      spawnEnv[key] = value;
+    }
   }
   if (runtimeEnv) {
     for (const [key, value] of Object.entries(runtimeEnv)) {
@@ -317,6 +326,10 @@ interface TerminalManagerOptions {
   historyLineLimit?: number;
   ptyAdapter: PtyAdapterShape;
   shellResolver?: () => string;
+  workspaceDevShellResolver?: (input: {
+    readonly cwd: string;
+    readonly devShell: ProjectDevShell;
+  }) => Promise<Record<string, string> | null>;
   subprocessChecker?: TerminalSubprocessChecker;
   subprocessPollIntervalMs?: number;
   processKillGraceMs?: number;
@@ -329,6 +342,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
   private readonly historyLineLimit: number;
   private readonly ptyAdapter: PtyAdapterShape;
   private readonly shellResolver: () => string;
+  private readonly workspaceDevShellResolver?: TerminalManagerOptions["workspaceDevShellResolver"];
   private readonly persistQueues = new Map<string, Promise<void>>();
   private readonly persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly pendingPersistHistory = new Map<string, string>();
@@ -349,6 +363,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
     this.historyLineLimit = options.historyLineLimit ?? DEFAULT_HISTORY_LINE_LIMIT;
     this.ptyAdapter = options.ptyAdapter;
     this.shellResolver = options.shellResolver ?? defaultShellResolver;
+    this.workspaceDevShellResolver = options.workspaceDevShellResolver;
     this.persistDebounceMs = DEFAULT_PERSIST_DEBOUNCE_MS;
     this.subprocessChecker = options.subprocessChecker ?? defaultSubprocessChecker;
     this.subprocessPollIntervalMs =
@@ -388,6 +403,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
           unsubscribeExit: null,
           hasRunningSubprocess: false,
           runtimeEnv: normalizedRuntimeEnv(input.env),
+          devShell: input.devShell ?? DEFAULT_PROJECT_DEV_SHELL,
         };
         this.sessions.set(sessionKey, session);
         this.evictInactiveSessionsIfNeeded();
@@ -401,15 +417,19 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
       const targetRows = input.rows ?? existing.rows;
       const runtimeEnvChanged =
         JSON.stringify(currentRuntimeEnv) !== JSON.stringify(nextRuntimeEnv);
+      const nextDevShell = input.devShell ?? DEFAULT_PROJECT_DEV_SHELL;
+      const devShellChanged = JSON.stringify(existing.devShell) !== JSON.stringify(nextDevShell);
 
-      if (existing.cwd !== input.cwd || runtimeEnvChanged) {
+      if (existing.cwd !== input.cwd || runtimeEnvChanged || devShellChanged) {
         this.stopProcess(existing);
         existing.cwd = input.cwd;
         existing.runtimeEnv = nextRuntimeEnv;
+        existing.devShell = nextDevShell;
         existing.history = "";
         await this.persistHistory(existing.threadId, existing.terminalId, existing.history);
       } else if (existing.status === "exited" || existing.status === "error") {
         existing.runtimeEnv = nextRuntimeEnv;
+        existing.devShell = nextDevShell;
         existing.history = "";
         await this.persistHistory(existing.threadId, existing.terminalId, existing.history);
       } else if (currentRuntimeEnv !== nextRuntimeEnv) {
@@ -507,6 +527,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
           unsubscribeExit: null,
           hasRunningSubprocess: false,
           runtimeEnv: normalizedRuntimeEnv(input.env),
+          devShell: input.devShell ?? DEFAULT_PROJECT_DEV_SHELL,
         };
         this.sessions.set(sessionKey, session);
         this.evictInactiveSessionsIfNeeded();
@@ -514,6 +535,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
         this.stopProcess(session);
         session.cwd = input.cwd;
         session.runtimeEnv = normalizedRuntimeEnv(input.env);
+        session.devShell = input.devShell ?? DEFAULT_PROJECT_DEV_SHELL;
       }
 
       const cols = input.cols ?? session.cols;
@@ -586,13 +608,20 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
     session.exitCode = null;
     session.exitSignal = null;
     session.hasRunningSubprocess = false;
+    session.devShell = input.devShell ?? DEFAULT_PROJECT_DEV_SHELL;
     session.updatedAt = new Date().toISOString();
 
     let ptyProcess: PtyProcess | null = null;
     let startedShell: string | null = null;
     try {
       const shellCandidates = resolveShellCandidates(this.shellResolver);
-      const terminalEnv = createTerminalSpawnEnv(process.env, session.runtimeEnv);
+      const devShellEnv = this.workspaceDevShellResolver
+        ? await this.workspaceDevShellResolver({
+            cwd: session.cwd,
+            devShell: session.devShell,
+          })
+        : null;
+      const terminalEnv = createTerminalSpawnEnv(process.env, devShellEnv, session.runtimeEnv);
       let lastSpawnError: unknown = null;
 
       const spawnWithCandidate = (candidate: ShellCandidate) =>
@@ -1177,8 +1206,17 @@ export const TerminalManagerLive = Layer.effect(
     const logsDir = join(stateDir, "logs", "terminals");
 
     const ptyAdapter = yield* PtyAdapter;
+    const workspaceDevShell = yield* WorkspaceDevShell;
     const runtime = yield* Effect.acquireRelease(
-      Effect.sync(() => new TerminalManagerRuntime({ logsDir, ptyAdapter })),
+      Effect.sync(
+        () =>
+          new TerminalManagerRuntime({
+            logsDir,
+            ptyAdapter,
+            workspaceDevShellResolver: (input) =>
+              Effect.runPromise(workspaceDevShell.resolveEnvironmentOverlay(input)),
+          }),
+      ),
       (r) => Effect.sync(() => r.dispose()),
     );
 

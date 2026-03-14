@@ -1,6 +1,6 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Plus, SquareSplitHorizontal, TerminalSquare, Trash2, XIcon } from "lucide-react";
-import { type ThreadId } from "@t3tools/contracts";
+import { type ProjectDevShell, type ThreadId } from "@t3tools/contracts";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import {
   type PointerEvent as ReactPointerEvent,
@@ -112,6 +112,7 @@ interface TerminalViewportProps {
   terminalId: string;
   cwd: string;
   runtimeEnv?: Record<string, string>;
+  devShell: ProjectDevShell;
   onSessionExited: () => void;
   focusRequestId: number;
   autoFocus: boolean;
@@ -124,6 +125,7 @@ function TerminalViewport({
   terminalId,
   cwd,
   runtimeEnv,
+  devShell,
   onSessionExited,
   focusRequestId,
   autoFocus,
@@ -283,6 +285,7 @@ function TerminalViewport({
           cols: activeTerminal.cols,
           rows: activeTerminal.rows,
           ...(runtimeEnv ? { env: runtimeEnv } : {}),
+          devShell,
         });
         if (disposed) return;
         activeTerminal.write("\u001bc");
@@ -392,7 +395,7 @@ function TerminalViewport({
     // autoFocus is intentionally omitted;
     // it is only read at mount time and must not trigger terminal teardown/recreation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cwd, runtimeEnv, terminalId, threadId]);
+  }, [cwd, devShell, runtimeEnv, terminalId, threadId]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -437,6 +440,7 @@ interface ThreadTerminalDrawerProps {
   threadId: ThreadId;
   cwd: string;
   runtimeEnv?: Record<string, string>;
+  devShell: ProjectDevShell;
   height: number;
   terminalIds: string[];
   activeTerminalId: string;
@@ -486,6 +490,7 @@ export default function ThreadTerminalDrawer({
   threadId,
   cwd,
   runtimeEnv,
+  devShell,
   height,
   terminalIds,
   activeTerminalId,
@@ -798,6 +803,7 @@ export default function ThreadTerminalDrawer({
                         terminalId={terminalId}
                         cwd={cwd}
                         {...(runtimeEnv ? { runtimeEnv } : {})}
+                        devShell={devShell}
                         onSessionExited={() => onCloseTerminal(terminalId)}
                         focusRequestId={focusRequestId}
                         autoFocus={terminalId === resolvedActiveTerminalId}
@@ -816,6 +822,7 @@ export default function ThreadTerminalDrawer({
                   terminalId={resolvedActiveTerminalId}
                   cwd={cwd}
                   {...(runtimeEnv ? { runtimeEnv } : {})}
+                  devShell={devShell}
                   onSessionExited={() => onCloseTerminal(resolvedActiveTerminalId)}
                   focusRequestId={focusRequestId}
                   autoFocus

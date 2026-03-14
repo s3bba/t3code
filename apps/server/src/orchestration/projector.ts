@@ -1,9 +1,12 @@
-import type { OrchestrationEvent, OrchestrationReadModel, ThreadId } from "@t3tools/contracts";
 import {
+  DEFAULT_PROJECT_DEV_SHELL,
   OrchestrationCheckpointSummary,
+  type OrchestrationEvent,
   OrchestrationMessage,
+  type OrchestrationReadModel,
   OrchestrationSession,
   OrchestrationThread,
+  type ThreadId,
 } from "@t3tools/contracts";
 import { Effect, Schema } from "effect";
 
@@ -183,6 +186,7 @@ export function projectEvent(
             workspaceRoot: payload.workspaceRoot,
             defaultModel: payload.defaultModel,
             scripts: payload.scripts,
+            devShell: payload.devShell ?? DEFAULT_PROJECT_DEV_SHELL,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
             deletedAt: null,
@@ -215,6 +219,7 @@ export function projectEvent(
                     ? { defaultModel: payload.defaultModel }
                     : {}),
                   ...(payload.scripts !== undefined ? { scripts: payload.scripts } : {}),
+                  ...(payload.devShell !== undefined ? { devShell: payload.devShell } : {}),
                   updatedAt: payload.updatedAt,
                 }
               : project,
