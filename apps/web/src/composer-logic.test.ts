@@ -8,6 +8,7 @@ import {
   isCollapsedCursorAdjacentToMention,
   parseStandaloneComposerSlashCommand,
   replaceTextRange,
+  shouldSubmitComposerOnEnter,
 } from "./composer-logic";
 
 describe("detectComposerTrigger", () => {
@@ -236,5 +237,47 @@ describe("parseStandaloneComposerSlashCommand", () => {
 
   it("ignores slash commands with extra message text", () => {
     expect(parseStandaloneComposerSlashCommand("/plan explain this")).toBeNull();
+  });
+});
+
+describe("shouldSubmitComposerOnEnter", () => {
+  it("submits on Enter by default", () => {
+    expect(
+      shouldSubmitComposerOnEnter({
+        ctrlEnterToSend: false,
+        ctrlKey: false,
+        shiftKey: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps Shift+Enter as a newline when Enter submits", () => {
+    expect(
+      shouldSubmitComposerOnEnter({
+        ctrlEnterToSend: false,
+        ctrlKey: false,
+        shiftKey: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("requires Ctrl+Enter when the setting is enabled", () => {
+    expect(
+      shouldSubmitComposerOnEnter({
+        ctrlEnterToSend: true,
+        ctrlKey: false,
+        shiftKey: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("submits on Ctrl+Enter when the setting is enabled", () => {
+    expect(
+      shouldSubmitComposerOnEnter({
+        ctrlEnterToSend: true,
+        ctrlKey: true,
+        shiftKey: false,
+      }),
+    ).toBe(true);
   });
 });
