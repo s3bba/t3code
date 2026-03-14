@@ -16,6 +16,7 @@
      - `git cherry-pick feat/nix-flake-support`
      - `git cherry-pick feat/nix-flake-devshell-integration`
      - `git cherry-pick feat/ctrl-enter-send`
+     - `git cherry-pick feat/ibm-plex-mono-everywhere`
      - `git cherry-pick fix/session-resume`
    - update nix hashes, so package can be installed from `stacks/all` branch
    - `git push --force-with-lease origin stacks/all`
@@ -23,3 +24,7 @@
 
 4. Upstream overlap check (report result):
    - For each `feat/*` and `fix/*`, check if features and fixes have been added upstream, (NOTE: the upstream will probably create their own fix, so it probably won't be 1:1 match)
+
+## Tracked Branch Notes
+
+- `feat/ibm-plex-mono-everywhere`: Switches the web app UI, code surfaces, and embedded terminal to IBM Plex Mono.
