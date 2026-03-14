@@ -116,7 +116,10 @@ describe("ProviderCommandReactor", () => {
           ? input.model
           : undefined;
       const cwd =
-        typeof input === "object" && input !== null && "cwd" in input && typeof input.cwd === "string"
+        typeof input === "object" &&
+        input !== null &&
+        "cwd" in input &&
+        typeof input.cwd === "string"
           ? input.cwd
           : undefined;
       const threadId =
