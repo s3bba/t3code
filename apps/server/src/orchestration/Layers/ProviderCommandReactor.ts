@@ -19,6 +19,7 @@ import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
 import { GitCore } from "../../git/Services/GitCore.ts";
 import { ProviderAdapterRequestError, ProviderServiceError } from "../../provider/Errors.ts";
 import { TextGeneration } from "../../git/Services/TextGeneration.ts";
+import { ProviderSessionDirectory } from "../../provider/Services/ProviderSessionDirectory.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import {
@@ -120,6 +121,7 @@ function buildGeneratedWorktreeBranchName(raw: string): string {
 const make = Effect.gen(function* () {
   const orchestrationEngine = yield* OrchestrationEngineService;
   const providerService = yield* ProviderService;
+  const providerSessionDirectory = yield* ProviderSessionDirectory;
   const git = yield* GitCore;
   const textGeneration = yield* TextGeneration;
   const handledTurnStartKeys = yield* Cache.make<string, true>({
@@ -261,6 +263,9 @@ const make = Effect.gen(function* () {
       const providerChanged =
         options?.provider !== undefined && options.provider !== currentProvider;
       const activeSession = yield* resolveActiveSession(existingSessionThreadId);
+      const persistedBinding = yield* providerSessionDirectory
+        .getBinding(existingSessionThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
       const sessionModelSwitch =
         currentProvider === undefined
           ? "in-session"
@@ -268,14 +273,19 @@ const make = Effect.gen(function* () {
       const modelChanged = options?.model !== undefined && options.model !== activeSession?.model;
       const shouldRestartForModelChange = modelChanged && sessionModelSwitch === "restart-session";
 
-      if (!runtimeModeChanged && !providerChanged && !shouldRestartForModelChange) {
+      if (
+        activeSession !== undefined &&
+        !runtimeModeChanged &&
+        !providerChanged &&
+        !shouldRestartForModelChange
+      ) {
         return existingSessionThreadId;
       }
 
       const resumeCursor =
         providerChanged || shouldRestartForModelChange
           ? undefined
-          : (activeSession?.resumeCursor ?? undefined);
+          : (activeSession?.resumeCursor ?? persistedBinding?.resumeCursor ?? undefined);
       yield* Effect.logInfo("provider command reactor restarting provider session", {
         threadId,
         existingSessionThreadId,
@@ -283,6 +293,7 @@ const make = Effect.gen(function* () {
         desiredProvider: options?.provider ?? currentProvider,
         currentRuntimeMode: thread.session?.runtimeMode,
         desiredRuntimeMode: thread.runtimeMode,
+        hasActiveSession: activeSession !== undefined,
         runtimeModeChanged,
         providerChanged,
         modelChanged,
