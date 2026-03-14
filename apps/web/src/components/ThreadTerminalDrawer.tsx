@@ -29,6 +29,15 @@ import { readNativeApi } from "~/nativeApi";
 
 const MIN_DRAWER_HEIGHT = 180;
 const MAX_DRAWER_HEIGHT_RATIO = 0.75;
+const APP_FONT_FAMILY_CSS_VAR = "--font-app";
+
+function terminalFontFamilyFromApp(): string {
+  if (typeof document === "undefined") return "monospace";
+  const fontFamily = getComputedStyle(document.documentElement)
+    .getPropertyValue(APP_FONT_FAMILY_CSS_VAR)
+    .trim();
+  return fontFamily || "monospace";
+}
 
 function maxDrawerHeight(): number {
   if (typeof window === "undefined") return DEFAULT_THREAD_TERMINAL_HEIGHT;
@@ -154,7 +163,7 @@ function TerminalViewport({
       lineHeight: 1.2,
       fontSize: 12,
       scrollback: 5_000,
-      fontFamily: '"SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace',
+      fontFamily: terminalFontFamilyFromApp(),
       theme: terminalThemeFromApp(),
     });
     terminal.loadAddon(fitAddon);
