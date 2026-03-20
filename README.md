@@ -13,7 +13,7 @@ Stack of all changes is on `stack/all`.
 
 # T3 Code
 
-T3 Code is a minimal web GUI for coding agents. Currently Codex-first, with Claude Code support coming soon.
+T3 Code is a minimal web GUI for coding agents (currently Codex and Claude, more coming soon).
 
 ## How to use
 
