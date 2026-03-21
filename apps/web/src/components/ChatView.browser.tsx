@@ -1718,7 +1718,9 @@ describe("ChatView timeline estimator parity (full app)", () => {
       await vi.waitFor(
         () => {
           expect(hasTurnStartRequest()).toBe(false);
-          expect(useComposerDraftStore.getState().draftsByThreadId[THREAD_ID]?.prompt).toContain("\n");
+          expect(useComposerDraftStore.getState().draftsByThreadId[THREAD_ID]?.prompt).toContain(
+            "\n",
+          );
         },
         { timeout: 8_000, interval: 16 },
       );
