@@ -1,0 +1,9 @@
+[
+  "apps/desktop/node_modules"
+  "apps/marketing/node_modules"
+  "apps/server/node_modules"
+  "apps/web/node_modules"
+  "packages/contracts/node_modules"
+  "packages/shared/node_modules"
+  "scripts/node_modules"
+]

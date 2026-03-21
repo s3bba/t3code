@@ -24,6 +24,28 @@ const LAUNCHER_VERSION = 1;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const desktopDir = resolve(__dirname, "..");
 
+function resolveOverrideElectronPath() {
+  if (process.platform === "darwin") {
+    return null;
+  }
+
+  const overrideDistPath = process.env.ELECTRON_OVERRIDE_DIST_PATH;
+  if (!overrideDistPath) {
+    return null;
+  }
+
+  const executableName = process.platform === "win32" ? "electron.exe" : "electron";
+  const overrideBinaryPath = join(overrideDistPath, executableName);
+
+  if (!existsSync(overrideBinaryPath)) {
+    throw new Error(
+      `ELECTRON_OVERRIDE_DIST_PATH points to "${overrideDistPath}", but "${overrideBinaryPath}" does not exist.`,
+    );
+  }
+
+  return overrideBinaryPath;
+}
+
 function setPlistString(plistPath, key, value) {
   const replaceResult = spawnSync("plutil", ["-replace", key, "-string", value, plistPath], {
     encoding: "utf8",
@@ -133,8 +155,21 @@ function buildMacLauncher(electronBinaryPath) {
 }
 
 export function resolveElectronPath() {
+  const overrideElectronPath = resolveOverrideElectronPath();
+  if (overrideElectronPath) {
+    return overrideElectronPath;
+  }
+
   const require = createRequire(import.meta.url);
-  const electronBinaryPath = require("electron");
+  let electronBinaryPath;
+  try {
+    electronBinaryPath = require("electron");
+  } catch (error) {
+    throw new Error(
+      "Unable to resolve the Electron runtime. On NixOS, make sure the desktop task receives ELECTRON_OVERRIDE_DIST_PATH from the shell.",
+      { cause: error },
+    );
+  }
 
   if (process.platform !== "darwin") {
     return electronBinaryPath;

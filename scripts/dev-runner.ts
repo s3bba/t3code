@@ -13,6 +13,7 @@ const BASE_SERVER_PORT = 3773;
 const BASE_WEB_PORT = 5733;
 const MAX_HASH_OFFSET = 3000;
 const MAX_PORT = 65535;
+const TURBO_LOOSE_ENV_ARG = "--env-mode=loose";
 
 export const DEFAULT_T3_HOME = Effect.map(Effect.service(Path.Path), (path) =>
   path.join(homedir(), ".t3"),
@@ -22,15 +23,23 @@ const MODE_ARGS = {
   dev: [
     "run",
     "dev",
+    TURBO_LOOSE_ENV_ARG,
     "--ui=tui",
     "--filter=@t3tools/contracts",
     "--filter=@t3tools/web",
     "--filter=t3",
     "--parallel",
   ],
-  "dev:server": ["run", "dev", "--filter=t3"],
-  "dev:web": ["run", "dev", "--filter=@t3tools/web"],
-  "dev:desktop": ["run", "dev", "--filter=@t3tools/desktop", "--filter=@t3tools/web", "--parallel"],
+  "dev:server": ["run", "dev", TURBO_LOOSE_ENV_ARG, "--filter=t3"],
+  "dev:web": ["run", "dev", TURBO_LOOSE_ENV_ARG, "--filter=@t3tools/web"],
+  "dev:desktop": [
+    "run",
+    "dev",
+    TURBO_LOOSE_ENV_ARG,
+    "--filter=@t3tools/desktop",
+    "--filter=@t3tools/web",
+    "--parallel",
+  ],
 } as const satisfies Record<string, ReadonlyArray<string>>;
 
 type DevMode = keyof typeof MODE_ARGS;
