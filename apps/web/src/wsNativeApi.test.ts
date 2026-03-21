@@ -233,6 +233,39 @@ describe("wsNativeApi", () => {
     });
   });
 
+  it("delivers and caches workspace dev shell events", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { createWsNativeApi, onWorkspaceDevShellEvent } = await import("./wsNativeApi");
+
+    createWsNativeApi();
+    const listener = vi.fn();
+    onWorkspaceDevShellEvent(listener);
+
+    emitPush(WS_CHANNELS.workspaceDevShellEvent, {
+      type: "loading",
+      cwd: "/tmp/workspace",
+      createdAt: "2026-03-07T12:00:00.000Z",
+    });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith({
+      type: "loading",
+      cwd: "/tmp/workspace",
+      createdAt: "2026-03-07T12:00:00.000Z",
+    });
+
+    const lateListener = vi.fn();
+    onWorkspaceDevShellEvent(lateListener);
+
+    expect(lateListener).toHaveBeenCalledTimes(1);
+    expect(lateListener).toHaveBeenCalledWith({
+      type: "loading",
+      cwd: "/tmp/workspace",
+      createdAt: "2026-03-07T12:00:00.000Z",
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   it("forwards valid terminal and orchestration events", async () => {
     const { createWsNativeApi } = await import("./wsNativeApi");
 

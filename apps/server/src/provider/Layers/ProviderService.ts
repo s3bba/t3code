@@ -10,7 +10,9 @@
  * @module ProviderServiceLive
  */
 import {
+  DEFAULT_PROJECT_DEV_SHELL,
   NonNegativeInt,
+  ProjectDevShell,
   ThreadId,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
@@ -98,6 +100,7 @@ function toRuntimePayloadFromSession(
   return {
     cwd: session.cwd ?? null,
     model: session.model ?? null,
+    devShell: session.devShell,
     activeTurnId: session.activeTurnId ?? null,
     lastError: session.lastError ?? null,
     ...(extra?.modelOptions !== undefined ? { modelOptions: extra.modelOptions } : {}),
@@ -141,6 +144,20 @@ function readPersistedCwd(
   if (typeof rawCwd !== "string") return undefined;
   const trimmed = rawCwd.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readPersistedDevShell(
+  runtimePayload: ProviderRuntimeBinding["runtimePayload"],
+): ProjectDevShell {
+  if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
+    return DEFAULT_PROJECT_DEV_SHELL;
+  }
+  const rawDevShell = "devShell" in runtimePayload ? runtimePayload.devShell : undefined;
+  try {
+    return Schema.decodeUnknownSync(ProjectDevShell)(rawDevShell);
+  } catch {
+    return DEFAULT_PROJECT_DEV_SHELL;
+  }
 }
 
 const makeProviderService = (options?: ProviderServiceLiveOptions) =>
@@ -240,6 +257,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
         const persistedCwd = readPersistedCwd(input.binding.runtimePayload);
         const persistedModelOptions = readPersistedModelOptions(input.binding.runtimePayload);
         const persistedProviderOptions = readPersistedProviderOptions(input.binding.runtimePayload);
+        const persistedDevShell = readPersistedDevShell(input.binding.runtimePayload);
 
         const resumed = yield* adapter.startSession({
           threadId: input.binding.threadId,
@@ -247,6 +265,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           ...(persistedCwd ? { cwd: persistedCwd } : {}),
           ...(persistedModelOptions ? { modelOptions: persistedModelOptions } : {}),
           ...(persistedProviderOptions ? { providerOptions: persistedProviderOptions } : {}),
+          devShell: persistedDevShell,
           ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
           runtimeMode: input.binding.runtimeMode ?? "full-access",
         });

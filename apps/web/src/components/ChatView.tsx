@@ -2,24 +2,26 @@ import {
   type ApprovalRequestId,
   DEFAULT_MODEL_BY_PROVIDER,
   type ClaudeCodeEffort,
+  type EditorId,
+  type KeybindingCommand,
   type MessageId,
+  type ProjectEntry,
+  type ProjectDevShell,
+  type ProjectId,
   type ProjectScript,
   type ModelSlug,
   type ProviderKind,
-  type ProjectEntry,
-  type ProjectId,
   type ProviderApprovalDecision,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   type ResolvedKeybindingsConfig,
+  RuntimeMode,
   type ServerProviderStatus,
   type ThreadId,
   type TurnId,
-  type EditorId,
-  type KeybindingCommand,
+  type WorkspaceDevShellEvent,
   OrchestrationThreadActivity,
   ProviderInteractionMode,
-  RuntimeMode,
 } from "@t3tools/contracts";
 import {
   applyClaudePromptEffortPrefix,
@@ -125,6 +127,7 @@ import {
   resolveAppModelSelection,
   useAppSettings,
 } from "../appSettings";
+import { onWorkspaceDevShellEvent } from "~/wsNativeApi";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import {
   type ComposerImageAttachment,
@@ -360,6 +363,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
     {},
     LastInvokedScriptByProjectSchema,
   );
+  const [workspaceDevShellEventsByCwd, setWorkspaceDevShellEventsByCwd] = useState<
+    Record<string, WorkspaceDevShellEvent>
+  >({});
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const [messagesScrollElement, setMessagesScrollElement] = useState<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -1111,6 +1117,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
   );
   const activeProjectCwd = activeProject?.cwd ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
+  const activeWorkspaceDevShellEvent = useMemo(() => {
+    const orderedCwds = [activeThreadWorktreePath, activeProjectCwd].filter(
+      (cwd): cwd is string => typeof cwd === "string" && cwd.length > 0,
+    );
+    for (const cwd of orderedCwds) {
+      const event = workspaceDevShellEventsByCwd[cwd];
+      if (event) {
+        return event;
+      }
+    }
+    return null;
+  }, [activeProjectCwd, activeThreadWorktreePath, workspaceDevShellEventsByCwd]);
   const threadTerminalRuntimeEnv = useMemo(() => {
     if (!activeProjectCwd) return {};
     return projectScriptRuntimeEnv({
@@ -1120,6 +1138,28 @@ export default function ChatView({ threadId }: ChatViewProps) {
       worktreePath: activeThreadWorktreePath,
     });
   }, [activeProjectCwd, activeThreadWorktreePath]);
+  useEffect(
+    () =>
+      onWorkspaceDevShellEvent((event) => {
+        setWorkspaceDevShellEventsByCwd((current) => {
+          const existing = current[event.cwd];
+          if (
+            existing &&
+            existing.type === event.type &&
+            existing.createdAt === event.createdAt &&
+            ("message" in existing ? existing.message : undefined) ===
+              ("message" in event ? event.message : undefined)
+          ) {
+            return current;
+          }
+          return {
+            ...current,
+            [event.cwd]: event,
+          };
+        });
+      }),
+    [],
+  );
   // Default true while loading to avoid toolbar flicker.
   const isGitRepo = branchesQuery.data?.isRepo ?? true;
   const splitTerminalShortcutLabel = useMemo(
@@ -1357,6 +1397,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
             terminalId: targetTerminalId,
             cwd: targetCwd,
             env: runtimeEnv,
+            devShell: activeProject.devShell,
             cols: SCRIPT_TERMINAL_COLS,
             rows: SCRIPT_TERMINAL_ROWS,
           }
@@ -1365,6 +1406,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
             terminalId: targetTerminalId,
             cwd: targetCwd,
             env: runtimeEnv,
+            devShell: activeProject.devShell,
           };
 
       try {
@@ -1397,14 +1439,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
       terminalState.terminalIds,
     ],
   );
-  const persistProjectScripts = useCallback(
+  const dispatchProjectMetaUpdate = useCallback(
     async (input: {
       projectId: ProjectId;
-      projectCwd: string;
-      previousScripts: ProjectScript[];
-      nextScripts: ProjectScript[];
-      keybinding?: string | null;
-      keybindingCommand: KeybindingCommand;
+      scripts?: ProjectScript[];
+      devShell?: ProjectDevShell;
     }) => {
       const api = readNativeApi();
       if (!api) return;
@@ -1412,6 +1451,21 @@ export default function ChatView({ threadId }: ChatViewProps) {
       await api.orchestration.dispatchCommand({
         type: "project.meta.update",
         commandId: newCommandId(),
+        projectId: input.projectId,
+        ...(input.scripts !== undefined ? { scripts: input.scripts } : {}),
+        ...(input.devShell !== undefined ? { devShell: input.devShell } : {}),
+      });
+    },
+    [],
+  );
+  const persistProjectScripts = useCallback(
+    async (input: {
+      projectId: ProjectId;
+      nextScripts: ProjectScript[];
+      keybinding?: string | null;
+      keybindingCommand: KeybindingCommand;
+    }) => {
+      await dispatchProjectMetaUpdate({
         projectId: input.projectId,
         scripts: input.nextScripts,
       });
@@ -1422,11 +1476,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
       });
 
       if (isElectron && keybindingRule) {
+        const api = readNativeApi();
+        if (!api) return;
         await api.server.upsertKeybinding(keybindingRule);
         await queryClient.invalidateQueries({ queryKey: serverQueryKeys.all });
       }
     },
-    [queryClient],
+    [dispatchProjectMetaUpdate, queryClient],
   );
   const saveProjectScript = useCallback(
     async (input: NewProjectScriptInput) => {
@@ -1453,8 +1509,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
       await persistProjectScripts({
         projectId: activeProject.id,
-        projectCwd: activeProject.cwd,
-        previousScripts: activeProject.scripts,
         nextScripts,
         keybinding: input.keybinding,
         keybindingCommand: commandForProjectScript(nextId),
@@ -1487,8 +1541,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
       await persistProjectScripts({
         projectId: activeProject.id,
-        projectCwd: activeProject.cwd,
-        previousScripts: activeProject.scripts,
         nextScripts,
         keybinding: input.keybinding,
         keybindingCommand: commandForProjectScript(scriptId),
@@ -1506,8 +1558,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
       try {
         await persistProjectScripts({
           projectId: activeProject.id,
-          projectCwd: activeProject.cwd,
-          previousScripts: activeProject.scripts,
           nextScripts,
           keybinding: null,
           keybindingCommand: commandForProjectScript(scriptId),
@@ -1526,6 +1576,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
     },
     [activeProject, persistProjectScripts],
   );
+  const toggleProjectDevShell = useCallback(async () => {
+    if (!activeProject) return;
+    const nextDevShell: ProjectDevShell =
+      activeProject.devShell.kind === "nix-flake" ? { kind: "none" } : { kind: "nix-flake" };
+    await dispatchProjectMetaUpdate({
+      projectId: activeProject.id,
+      devShell: nextDevShell,
+    });
+  }, [activeProject, dispatchProjectMetaUpdate]);
 
   const handleRuntimeModeChange = useCallback(
     (mode: RuntimeMode) => {
@@ -3473,6 +3532,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
           activeThreadId={activeThread.id}
           activeThreadTitle={activeThread.title}
           activeProjectName={activeProject?.name}
+          activeProjectDevShell={activeProject?.devShell}
+          activeWorkspaceDevShellEvent={activeWorkspaceDevShellEvent}
           isGitRepo={isGitRepo}
           openInCwd={activeThread.worktreePath ?? activeProject?.cwd ?? null}
           activeProjectScripts={activeProject?.scripts}
@@ -3490,6 +3551,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
           onAddProjectScript={saveProjectScript}
           onUpdateProjectScript={updateProjectScript}
           onDeleteProjectScript={deleteProjectScript}
+          onToggleProjectDevShell={() => {
+            void toggleProjectDevShell();
+          }}
           onToggleDiff={onToggleDiff}
         />
       </header>
@@ -4116,6 +4180,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
             threadId={activeThread.id}
             cwd={gitCwd ?? activeProject.cwd}
             runtimeEnv={threadTerminalRuntimeEnv}
+            devShell={activeProject.devShell}
             height={terminalState.terminalHeight}
             terminalIds={terminalState.terminalIds}
             activeTerminalId={terminalState.activeTerminalId}

@@ -6,7 +6,7 @@
  *
  * @module ProjectionProjectRepository
  */
-import { IsoDateTime, ProjectId, ProjectScript } from "@t3tools/contracts";
+import { IsoDateTime, ProjectDevShell, ProjectId, ProjectScript } from "@t3tools/contracts";
 import { Option, Schema, ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -18,6 +18,7 @@ export const ProjectionProject = Schema.Struct({
   workspaceRoot: Schema.String,
   defaultModel: Schema.NullOr(Schema.String),
   scripts: Schema.Array(ProjectScript),
+  devShell: ProjectDevShell,
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),
