@@ -14,6 +14,7 @@
 let
   source = import ./source.nix { inherit lib; };
   desktopPackageJson = builtins.fromJSON (builtins.readFile ../apps/desktop/package.json);
+  workspaceNodeModulesPaths = import ./workspace-node-modules-paths.nix;
   platform = stdenv.hostPlatform;
   bunCpu =
     if platform.isAarch64 then "arm64"
@@ -70,7 +71,15 @@ stdenv.mkDerivation {
     runHook preInstall
 
     mkdir -p "$out"
-    find . -type d -name node_modules -exec cp -R --parents {} "$out" \;
+    cp -R node_modules "$out/"
+  ''
+  + lib.concatMapStringsSep "\n" (dir: ''
+    if [ -d "${dir}" ]; then
+      mkdir -p "$out/$(dirname "${dir}")"
+      cp -R "${dir}" "$out/${dir}"
+    fi
+  '') workspaceNodeModulesPaths
+  + ''
 
     runHook postInstall
   '';

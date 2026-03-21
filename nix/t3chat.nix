@@ -16,6 +16,7 @@
 let
   source = import ./source.nix { inherit lib; };
   desktopPackageJson = builtins.fromJSON (builtins.readFile ../apps/desktop/package.json);
+  workspaceNodeModulesPaths = import ./workspace-node-modules-paths.nix;
   hasCommitHash = commitHash != null && builtins.match "^[0-9a-fA-F]+$" commitHash != null;
   runtimePackageJson = builtins.toJSON {
     name = "t3code";
@@ -51,12 +52,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     cp -R ${finalAttrs.node_modules}/. .
     for dir in \
       node_modules \
-      apps/desktop/node_modules \
-      apps/server/node_modules \
-      apps/web/node_modules \
-      packages/contracts/node_modules \
-      packages/shared/node_modules \
-      scripts/node_modules
+      ${lib.concatStringsSep " \\\n      " workspaceNodeModulesPaths}
     do
       if [ -e "$dir" ]; then
         chmod -R u+w "$dir"
