@@ -9,7 +9,7 @@
   gcc,
   writableTmpDirAsHomeHook,
   rev ? "dirty",
-  hash ? "sha256-b+lVeOmPN5yDuk/Z8N27TBqGQEQwphI28Ga2f5Z2ilg=",
+  hash ? "sha256-apr7SFY1JYpb6shVlXmUiJRceUI6IjbIhP35uBmAuJA=",
 }:
 let
   source = import ./source.nix { inherit lib; };
